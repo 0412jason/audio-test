@@ -584,7 +584,28 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    /**
+     * Smoothly ramps the AudioTrack volume between [from] and [to] over [steps] steps. Each step
+     * sleeps [stepMs] milliseconds.
+     */
+    private fun fadeVolume(
+            track: AudioTrack,
+            from: Float,
+            to: Float,
+            steps: Int = 40,
+            stepMs: Long = 1
+    ) {
+        for (i in 0..steps) {
+            val vol = from + (to - from) * (i.toFloat() / steps)
+            track.setVolume(vol)
+            Thread.sleep(stepMs)
+        }
+    }
+
     private fun stopPlayback(instanceId: Int) {
+        // Fade out before signalling the playback thread to stop
+        audioTracks[instanceId]?.let { fadeVolume(it, 1f, 0f) }
+
         isPlayingMap[instanceId] = false
         isPausedMap[instanceId] = false
         playbackThreads[instanceId]?.join()
@@ -600,6 +621,8 @@ class MainActivity : FlutterActivity() {
 
     private fun pausePlayback(instanceId: Int) {
         if (isPlayingMap[instanceId] == true && isPausedMap[instanceId] == false) {
+            // Fade out, then pause — prevents the abrupt discontinuity / pop
+            audioTracks[instanceId]?.let { fadeVolume(it, 1f, 0f) }
             isPausedMap[instanceId] = true
             audioTracks[instanceId]?.pause()
         }
@@ -607,8 +630,11 @@ class MainActivity : FlutterActivity() {
 
     private fun resumePlayback(instanceId: Int) {
         if (isPlayingMap[instanceId] == true && isPausedMap[instanceId] == true) {
+            // Start at volume 0, resume playback, then fade in
+            audioTracks[instanceId]?.setVolume(0f)
             isPausedMap[instanceId] = false
             audioTracks[instanceId]?.play()
+            audioTracks[instanceId]?.let { fadeVolume(it, 0f, 1f) }
         }
     }
 
