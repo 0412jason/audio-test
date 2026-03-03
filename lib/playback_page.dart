@@ -141,6 +141,9 @@ class _PlaybackConfigWidgetState extends State<PlaybackConfigWidget> {
   StreamSubscription? _amplitudeSub;
   static const int _maxAmplitudes = 100;
 
+  // Non-null when a local file has been analysed
+  FileAudioInfo? _detectedFileInfo;
+
   @override
   void initState() {
     super.initState();
@@ -237,6 +240,25 @@ class _PlaybackConfigWidgetState extends State<PlaybackConfigWidget> {
     await AudioEngine.resumePlayback(_instanceId);
   }
 
+  Future<void> _pickFile() async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.audio,
+    );
+    if (result != null && mounted) {
+      final path = result.files.single.path!;
+      final info = await AudioEngine.getFileAudioInfo(path);
+      setState(() {
+        _localFilePath = path;
+        _detectedFileInfo = info;
+        if (info != null) {
+          _sampleRateController.text = info.sampleRate.toString();
+          _selectedChannelConfig = info.channelConfig;
+          _selectedAudioFormat = info.audioFormat;
+        }
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -248,17 +270,7 @@ class _PlaybackConfigWidgetState extends State<PlaybackConfigWidget> {
             child: SingleChildScrollView(
               child: Column(
                 children: [
-                  TextField(
-                    controller: _sampleRateController,
-                    decoration: const InputDecoration(
-                      labelText: 'Sample Rate (Hz)',
-                      contentPadding: EdgeInsets.symmetric(vertical: 4),
-                    ),
-                    keyboardType: TextInputType.number,
-                    enabled: !_isPlaying,
-                  ),
-                  const SizedBox(height: 4),
-
+                  // ── Playback Source (always first) ──────────────────────
                   TrackedDropdownMenu<int>(
                     expandedInsets: EdgeInsets.zero,
                     label: const Text('Playback Source'),
@@ -274,7 +286,17 @@ class _PlaybackConfigWidgetState extends State<PlaybackConfigWidget> {
                     ],
                     onSelected: (v) {
                       if (v != null) {
-                        setState(() => _playbackSource = v);
+                        setState(() {
+                          _playbackSource = v;
+                          if (v == 0) {
+                            // restore editable defaults when switching to sine
+                            _detectedFileInfo = null;
+                            _localFilePath = null;
+                            _sampleRateController.text = '44100';
+                            _selectedChannelConfig = 4;
+                            _selectedAudioFormat = 2;
+                          }
+                        });
                       }
                     },
                   ),
@@ -291,18 +313,7 @@ class _PlaybackConfigWidgetState extends State<PlaybackConfigWidget> {
                           ),
                         ),
                         ElevatedButton(
-                          onPressed: _isPlaying
-                              ? null
-                              : () async {
-                                  FilePickerResult? result = await FilePicker
-                                      .platform
-                                      .pickFiles(type: FileType.audio);
-                                  if (result != null) {
-                                    setState(() {
-                                      _localFilePath = result.files.single.path;
-                                    });
-                                  }
-                                },
+                          onPressed: _isPlaying ? null : _pickFile,
                           child: const Text('Pick File'),
                         ),
                       ],
@@ -310,6 +321,21 @@ class _PlaybackConfigWidgetState extends State<PlaybackConfigWidget> {
                   ],
                   const SizedBox(height: 4),
 
+                  // ── Sample Rate ─────────────────────────────────────────
+                  TextField(
+                    controller: _sampleRateController,
+                    decoration: const InputDecoration(
+                      labelText: 'Sample Rate (Hz)',
+                      contentPadding: EdgeInsets.symmetric(vertical: 4),
+                    ),
+                    keyboardType: TextInputType.number,
+                    enabled:
+                        !_isPlaying &&
+                        (_playbackSource == 0 || _detectedFileInfo == null),
+                  ),
+                  const SizedBox(height: 4),
+
+                  // ── Channel Config ──────────────────────────────────────
                   TrackedDropdownMenu<int>(
                     expandedInsets: EdgeInsets.zero,
                     label: const Text('Channel Config'),
@@ -318,7 +344,9 @@ class _PlaybackConfigWidgetState extends State<PlaybackConfigWidget> {
                       isDense: true,
                     ),
                     initialSelection: _selectedChannelConfig,
-                    enabled: !_isPlaying,
+                    enabled:
+                        !_isPlaying &&
+                        (_playbackSource == 0 || _detectedFileInfo == null),
                     dropdownMenuEntries: const [
                       DropdownMenuEntry(value: 4, label: "Mono (Out)"),
                       DropdownMenuEntry(value: 12, label: "Stereo (Out)"),
@@ -331,6 +359,7 @@ class _PlaybackConfigWidgetState extends State<PlaybackConfigWidget> {
                   ),
                   const SizedBox(height: 4),
 
+                  // ── Audio Format ────────────────────────────────────────
                   TrackedDropdownMenu<int>(
                     expandedInsets: EdgeInsets.zero,
                     label: const Text('Audio Format'),
@@ -339,7 +368,9 @@ class _PlaybackConfigWidgetState extends State<PlaybackConfigWidget> {
                       isDense: true,
                     ),
                     initialSelection: _selectedAudioFormat,
-                    enabled: !_isPlaying,
+                    enabled:
+                        !_isPlaying &&
+                        (_playbackSource == 0 || _detectedFileInfo == null),
                     dropdownMenuEntries: const [
                       DropdownMenuEntry(value: 3, label: "8-bit PCM"),
                       DropdownMenuEntry(value: 2, label: "16-bit PCM"),

@@ -27,6 +27,26 @@ class AudioDevice {
   }
 }
 
+class FileAudioInfo {
+  final int sampleRate;
+  final int channelConfig;
+  final int audioFormat;
+
+  FileAudioInfo({
+    required this.sampleRate,
+    required this.channelConfig,
+    required this.audioFormat,
+  });
+
+  factory FileAudioInfo.fromMap(Map<Object?, Object?> map) {
+    return FileAudioInfo(
+      sampleRate: map['sampleRate'] as int,
+      channelConfig: map['channelConfig'] as int,
+      audioFormat: map['audioFormat'] as int,
+    );
+  }
+}
+
 class AudioEngine {
   static const MethodChannel _methodChannel = MethodChannel(
     'com.example.audiotest/audio',
@@ -94,6 +114,38 @@ class AudioEngine {
     } on PlatformException catch (e) {
       debugPrint("Failed to get audio source options: '${e.message}'.");
       return {};
+    }
+  }
+
+  static Future<Map<String, int>> getChannelConfigOptions(bool isOutput) async {
+    try {
+      final Map<Object?, Object?> result = await _methodChannel.invokeMethod(
+        'getChannelConfigOptions',
+        {'isOutput': isOutput},
+      );
+      Map<String, int> typedResult = {};
+      result.forEach((key, value) {
+        if (key is String && value is int) {
+          typedResult[key] = value;
+        }
+      });
+      return typedResult;
+    } on PlatformException catch (e) {
+      debugPrint("Failed to get channel config options: '${e.message}'.");
+      return {};
+    }
+  }
+
+  static Future<FileAudioInfo?> getFileAudioInfo(String filePath) async {
+    try {
+      final Map<Object?, Object?> result = await _methodChannel.invokeMethod(
+        'getFileAudioInfo',
+        {'filePath': filePath},
+      );
+      return FileAudioInfo.fromMap(result);
+    } on PlatformException catch (e) {
+      debugPrint("Failed to get file audio info: '${e.message}'.");
+      return null;
     }
   }
 

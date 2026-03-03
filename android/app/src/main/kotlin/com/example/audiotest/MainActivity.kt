@@ -73,6 +73,25 @@ class MainActivity : FlutterActivity() {
                             val options = getAudioSourceOptions()
                             result.success(options)
                         }
+                        "getFileAudioInfo" -> {
+                            val filePath =
+                                    call.argument<String>("filePath")
+                                            ?: return@setMethodCallHandler result.error(
+                                                    "NO_PATH",
+                                                    "filePath is required",
+                                                    null
+                                            )
+                            val info = getFileAudioInfo(filePath)
+                            if (info == null) {
+                                result.error(
+                                        "READ_ERROR",
+                                        "Could not read audio info from file",
+                                        null
+                                )
+                            } else {
+                                result.success(info)
+                            }
+                        }
                         "startPlayback" -> {
                             val instanceId =
                                     call.argument<Int>("instanceId")
@@ -282,6 +301,56 @@ class MainActivity : FlutterActivity() {
         return mapOf("usages" to usages, "contentTypes" to contentTypes, "flags" to flags)
     }
 
+    private fun getFileAudioInfo(filePath: String): Map<String, Int>? {
+        val extractor = MediaExtractor()
+        return try {
+            extractor.setDataSource(filePath)
+            var audioTrackIndex = -1
+            for (i in 0 until extractor.trackCount) {
+                val fmt = extractor.getTrackFormat(i)
+                if (fmt.getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true) {
+                    audioTrackIndex = i
+                    break
+                }
+            }
+            if (audioTrackIndex < 0) return null
+
+            val fmt = extractor.getTrackFormat(audioTrackIndex)
+            val sampleRate =
+                    if (fmt.containsKey(MediaFormat.KEY_SAMPLE_RATE))
+                            fmt.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+                    else 44100
+            val channelCount =
+                    if (fmt.containsKey(MediaFormat.KEY_CHANNEL_COUNT))
+                            fmt.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+                    else 1
+            // MediaCodec typically decodes to PCM_16BIT; KEY_PCM_ENCODING may not be present
+            val pcmEncoding =
+                    if (fmt.containsKey(MediaFormat.KEY_PCM_ENCODING))
+                            fmt.getInteger(MediaFormat.KEY_PCM_ENCODING)
+                    else AudioFormat.ENCODING_PCM_16BIT
+
+            // Map channel count to AudioFormat channel mask
+            val channelConfig =
+                    when (channelCount) {
+                        1 -> AudioFormat.CHANNEL_OUT_MONO
+                        2 -> AudioFormat.CHANNEL_OUT_STEREO
+                        else -> AudioFormat.CHANNEL_OUT_MONO
+                    }
+
+            mapOf(
+                    "sampleRate" to sampleRate,
+                    "channelConfig" to channelConfig,
+                    "audioFormat" to pcmEncoding
+            )
+        } catch (e: Exception) {
+            Log.e("AudioTest", "getFileAudioInfo failed: $e")
+            null
+        } finally {
+            extractor.release()
+        }
+    }
+
     private fun getAudioDevices(isOutput: Boolean): List<Map<String, Any>> {
         val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         val flag =
@@ -362,7 +431,14 @@ class MainActivity : FlutterActivity() {
             if (filePath != null) {
                 playLocalFile(instanceId, audioTrack, filePath)
             } else {
-                playSineWave(instanceId, audioTrack, sampleRate, audioFormat, bufferSize)
+                playSineWave(
+                        instanceId,
+                        audioTrack,
+                        sampleRate,
+                        channelConfig,
+                        audioFormat,
+                        bufferSize
+                )
             }
         }
         playbackThreads[instanceId] = playbackThread
@@ -500,12 +576,15 @@ class MainActivity : FlutterActivity() {
             instanceId: Int,
             audioTrack: AudioTrack,
             sampleRate: Int,
+            channelConfig: Int,
             audioFormat: Int,
             bufferSize: Int
     ) {
         val frequency = 440.0 // A4 note
         var angle = 0.0
         val angleIncrement = 2.0 * Math.PI * frequency / sampleRate
+        // Each audio frame has one sample per channel; derive channel count from the mask
+        val channelCount = Integer.bitCount(channelConfig).coerceAtLeast(1)
 
         val is8Bit = audioFormat == AudioFormat.ENCODING_PCM_8BIT
         val is16Bit = audioFormat == AudioFormat.ENCODING_PCM_16BIT
@@ -526,55 +605,66 @@ class MainActivity : FlutterActivity() {
 
             if (is8Bit && byteBuffer != null) {
                 var maxAmp = 0
-                for (i in 0 until byteBuffer.size) {
+                var i = 0
+                while (i < byteBuffer.size) {
                     val sample = (sin(angle) * 127).toInt().toByte()
-                    byteBuffer[i] = sample
-                    angle += angleIncrement
-                    if (Math.abs(sample.toInt()) > maxAmp) {
-                        maxAmp = Math.abs(sample.toInt())
+                    repeat(channelCount) { ch ->
+                        if (i + ch < byteBuffer.size) byteBuffer[i + ch] = sample
                     }
+                    i += channelCount
+                    angle += angleIncrement
+                    if (Math.abs(sample.toInt()) > maxAmp) maxAmp = Math.abs(sample.toInt())
                 }
                 audioTrack.write(byteBuffer, 0, byteBuffer.size)
                 normalizedAmp = maxAmp.toDouble() / 127.0
             } else if (is24Bit && byteBuffer != null) {
                 var maxAmp = 0
-                // 24 bit packed is 3 bytes per sample
-                for (i in 0 until byteBuffer.size - 2 step 3) {
+                // 24-bit packed: 3 bytes per sample, channelCount samples per frame
+                val bytesPerSample = 3
+                val bytesPerFrame = bytesPerSample * channelCount
+                var i = 0
+                while (i + bytesPerFrame <= byteBuffer.size) {
                     val sampleInt = (sin(angle) * 8388607).toInt()
-
-                    // Little endian extraction
-                    byteBuffer[i] = (sampleInt and 0xFF).toByte()
-                    byteBuffer[i + 1] = ((sampleInt shr 8) and 0xFF).toByte()
-                    byteBuffer[i + 2] = ((sampleInt shr 16) and 0xFF).toByte()
-
-                    angle += angleIncrement
-                    if (Math.abs(sampleInt) > maxAmp) {
-                        maxAmp = Math.abs(sampleInt)
+                    val b0 = (sampleInt and 0xFF).toByte()
+                    val b1 = ((sampleInt shr 8) and 0xFF).toByte()
+                    val b2 = ((sampleInt shr 16) and 0xFF).toByte()
+                    for (ch in 0 until channelCount) {
+                        val base = i + ch * bytesPerSample
+                        byteBuffer[base] = b0
+                        byteBuffer[base + 1] = b1
+                        byteBuffer[base + 2] = b2
                     }
+                    i += bytesPerFrame
+                    angle += angleIncrement
+                    if (Math.abs(sampleInt) > maxAmp) maxAmp = Math.abs(sampleInt)
                 }
                 audioTrack.write(byteBuffer, 0, byteBuffer.size)
                 normalizedAmp = maxAmp.toDouble() / 8388607.0
             } else if (isFloat && floatBuffer != null) {
                 var maxAmp = 0.0f
-                for (i in 0 until floatBuffer.size) {
+                var i = 0
+                while (i < floatBuffer.size) {
                     val sample = sin(angle).toFloat()
-                    floatBuffer[i] = sample
-                    angle += angleIncrement
-                    if (Math.abs(sample) > maxAmp) {
-                        maxAmp = Math.abs(sample)
+                    repeat(channelCount) { ch ->
+                        if (i + ch < floatBuffer.size) floatBuffer[i + ch] = sample
                     }
+                    i += channelCount
+                    angle += angleIncrement
+                    if (Math.abs(sample) > maxAmp) maxAmp = Math.abs(sample)
                 }
                 audioTrack.write(floatBuffer, 0, floatBuffer.size, AudioTrack.WRITE_BLOCKING)
                 normalizedAmp = maxAmp.toDouble()
             } else if (shortBuffer != null) {
                 var maxAmp = 0
-                for (i in 0 until shortBuffer.size) {
+                var i = 0
+                while (i < shortBuffer.size) {
                     val sample = (sin(angle) * Short.MAX_VALUE).toInt().toShort()
-                    shortBuffer[i] = sample
-                    angle += angleIncrement
-                    if (Math.abs(sample.toInt()) > maxAmp) {
-                        maxAmp = Math.abs(sample.toInt())
+                    repeat(channelCount) { ch ->
+                        if (i + ch < shortBuffer.size) shortBuffer[i + ch] = sample
                     }
+                    i += channelCount
+                    angle += angleIncrement
+                    if (Math.abs(sample.toInt()) > maxAmp) maxAmp = Math.abs(sample.toInt())
                 }
                 audioTrack.write(shortBuffer, 0, shortBuffer.size)
                 normalizedAmp = maxAmp.toDouble() / Short.MAX_VALUE
