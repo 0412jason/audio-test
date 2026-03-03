@@ -123,7 +123,7 @@ class _PlaybackConfigWidgetState extends State<PlaybackConfigWidget> {
   int _playbackSource = 0; // 0 for Sine Wave, 1 for Local File
   String? _localFilePath;
 
-  int _selectedChannelConfig = 4; // AudioFormat.CHANNEL_OUT_MONO
+  int _selectedChannelConfig = 12; // AudioFormat.CHANNEL_OUT_STEREO
   int _selectedAudioFormat = 2; // AudioFormat.ENCODING_PCM_16BIT
 
   int _selectedUsage = 1;

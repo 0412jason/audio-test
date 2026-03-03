@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:audiotest/playback_page.dart';
 import 'package:audiotest/record_page.dart';
 import 'package:audiotest/menu_tracker.dart';
+import 'package:audiotest/voip_page.dart';
+import 'package:audiotest/multi_test_page.dart';
 
 void main() {
   runApp(const AudioTestApp());
@@ -45,7 +47,12 @@ class MainNavigationScreen extends StatefulWidget {
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
 
-  final List<Widget> _pages = const [PlaybackPage(), RecordPage()];
+  final List<Widget> _pages = const [
+    PlaybackPage(),
+    RecordPage(),
+    VoIPPage(),
+    MultiTestPage(),
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -80,6 +87,16 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               icon: Icon(Icons.mic_none),
               selectedIcon: Icon(Icons.mic),
               label: 'Record',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.call_outlined),
+              selectedIcon: Icon(Icons.call),
+              label: 'VoIP',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.grid_view_outlined),
+              selectedIcon: Icon(Icons.grid_view),
+              label: 'Multi',
             ),
           ],
         ),
