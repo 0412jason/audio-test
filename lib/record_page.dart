@@ -2,101 +2,20 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:collection';
 import 'audio_engine.dart';
-import 'waveform_painter.dart';
-import 'menu_tracker.dart';
+import 'widgets/split_view_layout.dart';
+import 'widgets/audio_config_fields.dart';
+import 'widgets/waveform_display.dart';
 
-class RecordPage extends StatefulWidget {
+class RecordPage extends StatelessWidget {
   const RecordPage({super.key});
-
-  @override
-  State<RecordPage> createState() => _RecordPageState();
-}
-
-class _RecordPageState extends State<RecordPage> {
-  int _splitCount = 1;
-
-  void _increaseSplit() {
-    setState(() {
-      if (_splitCount == 1) {
-        _splitCount = 2;
-      } else if (_splitCount == 2) {
-        _splitCount = 4;
-      }
-    });
-  }
-
-  void _decreaseSplit() {
-    setState(() {
-      if (_splitCount == 4) {
-        _splitCount = 2;
-      } else if (_splitCount == 2) {
-        _splitCount = 1;
-      }
-    });
-  }
-
-  Widget _buildGrid() {
-    if (_splitCount == 1) {
-      return const RecordConfigWidget();
-    } else if (_splitCount == 2) {
-      return Row(
-        children: const [
-          Expanded(child: RecordConfigWidget()),
-          VerticalDivider(width: 1, thickness: 1),
-          Expanded(child: RecordConfigWidget()),
-        ],
-      );
-    } else {
-      return Column(
-        children: [
-          Expanded(
-            child: Row(
-              children: const [
-                Expanded(child: RecordConfigWidget()),
-                VerticalDivider(width: 1, thickness: 1),
-                Expanded(child: RecordConfigWidget()),
-              ],
-            ),
-          ),
-          const Divider(height: 1, thickness: 1),
-          Expanded(
-            child: Row(
-              children: const [
-                Expanded(child: RecordConfigWidget()),
-                VerticalDivider(width: 1, thickness: 1),
-                Expanded(child: RecordConfigWidget()),
-              ],
-            ),
-          ),
-        ],
-      );
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.remove),
-                onPressed: _splitCount > 1 ? _decreaseSplit : null,
-              ),
-              const Text(
-                'Record Configuration',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              IconButton(
-                icon: const Icon(Icons.add),
-                onPressed: _splitCount < 4 ? _increaseSplit : null,
-              ),
-            ],
-          ),
-          Expanded(child: _buildGrid()),
-        ],
+      child: SplitViewLayout(
+        title: 'Record Configuration',
+        builder: () => const RecordConfigWidget(),
+        initialSplitCount: 1,
       ),
     );
   }
@@ -192,7 +111,7 @@ class _RecordConfigWidgetState extends State<RecordConfigWidget> {
   }
 
   void _startRecording() async {
-    int sampleRate = int.tryParse(_sampleRateController.text) ?? 44100;
+    int sampleRate = int.tryParse(_sampleRateController.text) ?? 48000;
 
     await AudioEngine.startRecording(
       instanceId: _instanceId,
@@ -252,30 +171,16 @@ class _RecordConfigWidgetState extends State<RecordConfigWidget> {
             child: SingleChildScrollView(
               child: Column(
                 children: [
-                  TextField(
+                  AudioConfigFields.sampleRateField(
                     controller: _sampleRateController,
-                    decoration: const InputDecoration(
-                      labelText: 'Sample Rate (Hz)',
-                      contentPadding: EdgeInsets.symmetric(vertical: 4),
-                    ),
-                    keyboardType: TextInputType.number,
                     enabled: !_isRecording,
                   ),
                   const SizedBox(height: 4),
 
-                  TrackedDropdownMenu<int>(
-                    expandedInsets: EdgeInsets.zero,
-                    label: const Text('Channel Config'),
-                    inputDecorationTheme: const InputDecorationTheme(
-                      contentPadding: EdgeInsets.symmetric(vertical: 4),
-                      isDense: true,
-                    ),
+                  AudioConfigFields.channelConfigDropdown(
                     initialSelection: _selectedChannelConfig,
                     enabled: !_isRecording,
-                    dropdownMenuEntries: const [
-                      DropdownMenuEntry(value: 16, label: "Mono (In)"),
-                      DropdownMenuEntry(value: 12, label: "Stereo (In)"),
-                    ],
+                    isInput: true,
                     onSelected: (v) {
                       if (v != null) {
                         setState(() => _selectedChannelConfig = v);
@@ -284,21 +189,9 @@ class _RecordConfigWidgetState extends State<RecordConfigWidget> {
                   ),
                   const SizedBox(height: 4),
 
-                  TrackedDropdownMenu<int>(
-                    expandedInsets: EdgeInsets.zero,
-                    label: const Text('Audio Format'),
-                    inputDecorationTheme: const InputDecorationTheme(
-                      contentPadding: EdgeInsets.symmetric(vertical: 4),
-                      isDense: true,
-                    ),
+                  AudioConfigFields.audioFormatDropdown(
                     initialSelection: _selectedAudioFormat,
                     enabled: !_isRecording,
-                    dropdownMenuEntries: const [
-                      DropdownMenuEntry(value: 3, label: "8-bit PCM"),
-                      DropdownMenuEntry(value: 2, label: "16-bit PCM"),
-                      DropdownMenuEntry(value: 21, label: "24-bit PCM"),
-                      DropdownMenuEntry(value: 4, label: "32-bit Float"),
-                    ],
                     onSelected: (v) {
                       if (v != null) {
                         setState(() => _selectedAudioFormat = v);
@@ -307,16 +200,11 @@ class _RecordConfigWidgetState extends State<RecordConfigWidget> {
                   ),
                   const SizedBox(height: 4),
 
-                  TrackedDropdownMenu<int>(
-                    expandedInsets: EdgeInsets.zero,
-                    label: const Text('Audio Source'),
-                    inputDecorationTheme: const InputDecorationTheme(
-                      contentPadding: EdgeInsets.symmetric(vertical: 4),
-                      isDense: true,
-                    ),
+                  AudioConfigFields.dropdown<int>(
+                    label: 'Audio Source',
                     initialSelection: _selectedSource,
                     enabled: !_isRecording,
-                    dropdownMenuEntries: _audioSources.isEmpty
+                    entries: _audioSources.isEmpty
                         ? const [
                             DropdownMenuEntry(value: 0, label: "DEFAULT (0)"),
                             DropdownMenuEntry(value: 1, label: "MIC (1)"),
@@ -344,16 +232,11 @@ class _RecordConfigWidgetState extends State<RecordConfigWidget> {
                   ),
                   const SizedBox(height: 8),
 
-                  TrackedDropdownMenu<int>(
-                    expandedInsets: EdgeInsets.zero,
-                    label: const Text('Audio Mode'),
-                    inputDecorationTheme: const InputDecorationTheme(
-                      contentPadding: EdgeInsets.symmetric(vertical: 4),
-                      isDense: true,
-                    ),
+                  AudioConfigFields.dropdown<int>(
+                    label: 'Audio Mode',
                     initialSelection: _selectedMode,
                     enabled: !_isRecording,
-                    dropdownMenuEntries: _audioModes.isEmpty
+                    entries: _audioModes.isEmpty
                         ? const [
                             DropdownMenuEntry(
                               value: 0,
@@ -378,27 +261,12 @@ class _RecordConfigWidgetState extends State<RecordConfigWidget> {
                   ),
                   const SizedBox(height: 8),
 
-                  TrackedDropdownMenu<AudioDevice?>(
-                    expandedInsets: EdgeInsets.zero,
-                    label: const Text('Input Device (Port ID - Name - Type)'),
-                    inputDecorationTheme: const InputDecorationTheme(
-                      contentPadding: EdgeInsets.symmetric(vertical: 4),
-                      isDense: true,
-                    ),
+                  AudioConfigFields.deviceDropdown(
+                    label: 'Input Device (Port ID - Name - Type)',
                     initialSelection: _selectedDevice,
                     enabled: !_isRecording,
-                    dropdownMenuEntries: [
-                      const DropdownMenuEntry(
-                        value: null,
-                        label: "Default Routing",
-                      ),
-                      ..._inputDevices.map(
-                        (d) => DropdownMenuEntry(
-                          value: d,
-                          label: "${d.id} - ${d.name} - ${d.type}",
-                        ),
-                      ),
-                    ],
+                    devices: _inputDevices,
+                    defaultLabel: "Default Routing",
                     onSelected: (v) => setState(() => _selectedDevice = v),
                   ),
                   const SizedBox(height: 8),
@@ -429,20 +297,9 @@ class _RecordConfigWidgetState extends State<RecordConfigWidget> {
           ),
           const SizedBox(height: 8),
 
-          SizedBox(
-            height: 60,
-            child: Container(
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: CustomPaint(
-                painter: WaveformPainter(
-                  amplitudes: _amplitudes,
-                  color: Theme.of(context).colorScheme.secondary,
-                ),
-              ),
-            ),
+          WaveformDisplay(
+            amplitudes: _amplitudes,
+            color: Theme.of(context).colorScheme.secondary,
           ),
           const SizedBox(height: 8),
 

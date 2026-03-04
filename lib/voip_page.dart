@@ -2,101 +2,20 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:collection';
 import 'audio_engine.dart';
-import 'menu_tracker.dart';
-import 'waveform_painter.dart';
+import 'widgets/split_view_layout.dart';
+import 'widgets/audio_config_fields.dart';
+import 'widgets/waveform_display.dart';
 
-class VoIPPage extends StatefulWidget {
+class VoIPPage extends StatelessWidget {
   const VoIPPage({super.key});
-
-  @override
-  State<VoIPPage> createState() => _VoIPPageState();
-}
-
-class _VoIPPageState extends State<VoIPPage> {
-  int _splitCount = 1;
-
-  void _increaseSplit() {
-    setState(() {
-      if (_splitCount == 1) {
-        _splitCount = 2;
-      } else if (_splitCount == 2) {
-        _splitCount = 4;
-      }
-    });
-  }
-
-  void _decreaseSplit() {
-    setState(() {
-      if (_splitCount == 4) {
-        _splitCount = 2;
-      } else if (_splitCount == 2) {
-        _splitCount = 1;
-      }
-    });
-  }
-
-  Widget _buildGrid() {
-    if (_splitCount == 1) {
-      return const VoIPConfigWidget();
-    } else if (_splitCount == 2) {
-      return Row(
-        children: const [
-          Expanded(child: VoIPConfigWidget()),
-          VerticalDivider(width: 1, thickness: 1),
-          Expanded(child: VoIPConfigWidget()),
-        ],
-      );
-    } else {
-      return Column(
-        children: [
-          Expanded(
-            child: Row(
-              children: const [
-                Expanded(child: VoIPConfigWidget()),
-                VerticalDivider(width: 1, thickness: 1),
-                Expanded(child: VoIPConfigWidget()),
-              ],
-            ),
-          ),
-          const Divider(height: 1, thickness: 1),
-          Expanded(
-            child: Row(
-              children: const [
-                Expanded(child: VoIPConfigWidget()),
-                VerticalDivider(width: 1, thickness: 1),
-                Expanded(child: VoIPConfigWidget()),
-              ],
-            ),
-          ),
-        ],
-      );
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.remove),
-                onPressed: _splitCount > 1 ? _decreaseSplit : null,
-              ),
-              const Text(
-                'VoIP Configuration',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              IconButton(
-                icon: const Icon(Icons.add),
-                onPressed: _splitCount < 4 ? _increaseSplit : null,
-              ),
-            ],
-          ),
-          Expanded(child: _buildGrid()),
-        ],
+      child: SplitViewLayout(
+        title: 'VoIP Configuration',
+        builder: () => const VoIPConfigWidget(),
+        initialSplitCount: 1,
       ),
     );
   }
@@ -299,29 +218,19 @@ class _VoIPConfigWidgetState extends State<VoIPConfigWidget> {
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
-                  TextField(
+
+                  AudioConfigFields.sampleRateField(
                     controller: _rxSampleRateController,
-                    decoration: const InputDecoration(
-                      labelText: 'RX Sample Rate (Hz)',
-                      contentPadding: EdgeInsets.symmetric(vertical: 4),
-                    ),
-                    keyboardType: TextInputType.number,
                     enabled: !_isCalling,
+                    label: 'RX Sample Rate (Hz)',
                   ),
                   const SizedBox(height: 8),
-                  TrackedDropdownMenu<int>(
-                    expandedInsets: EdgeInsets.zero,
-                    label: const Text('RX Channel Config'),
-                    inputDecorationTheme: const InputDecorationTheme(
-                      contentPadding: EdgeInsets.symmetric(vertical: 4),
-                      isDense: true,
-                    ),
+
+                  AudioConfigFields.channelConfigDropdown(
+                    customLabel: 'RX Channel Config',
                     initialSelection: _selectedPlaybackChannelConfig,
                     enabled: !_isCalling,
-                    dropdownMenuEntries: const [
-                      DropdownMenuEntry(value: 4, label: "Mono (Out)"),
-                      DropdownMenuEntry(value: 12, label: "Stereo (Out)"),
-                    ],
+                    isInput: false,
                     onSelected: (v) {
                       if (v != null) {
                         setState(() => _selectedPlaybackChannelConfig = v);
@@ -329,21 +238,11 @@ class _VoIPConfigWidgetState extends State<VoIPConfigWidget> {
                     },
                   ),
                   const SizedBox(height: 8),
-                  TrackedDropdownMenu<int>(
-                    expandedInsets: EdgeInsets.zero,
-                    label: const Text('RX Audio Format'),
-                    inputDecorationTheme: const InputDecorationTheme(
-                      contentPadding: EdgeInsets.symmetric(vertical: 4),
-                      isDense: true,
-                    ),
+
+                  AudioConfigFields.audioFormatDropdown(
+                    label: 'RX Audio Format',
                     initialSelection: _selectedPlaybackAudioFormat,
                     enabled: !_isCalling,
-                    dropdownMenuEntries: const [
-                      DropdownMenuEntry(value: 3, label: "8-bit PCM"),
-                      DropdownMenuEntry(value: 2, label: "16-bit PCM"),
-                      DropdownMenuEntry(value: 21, label: "24-bit PCM"),
-                      DropdownMenuEntry(value: 4, label: "32-bit Float"),
-                    ],
                     onSelected: (v) {
                       if (v != null) {
                         setState(() => _selectedPlaybackAudioFormat = v);
@@ -351,59 +250,36 @@ class _VoIPConfigWidgetState extends State<VoIPConfigWidget> {
                     },
                   ),
                   const SizedBox(height: 8),
-                  TrackedDropdownMenu<AudioDevice?>(
-                    label: const Text('RX Output Device (Speaker/Earpiece)'),
+
+                  AudioConfigFields.deviceDropdown(
+                    label: 'RX Output Device (Speaker/Earpiece)',
                     initialSelection: _selectedOutputDevice,
                     enabled: !_isCalling,
-                    expandedInsets: EdgeInsets.zero,
-                    inputDecorationTheme: const InputDecorationTheme(
-                      contentPadding: EdgeInsets.symmetric(vertical: 4),
-                      isDense: true,
-                    ),
-                    dropdownMenuEntries: [
-                      const DropdownMenuEntry(
-                        value: null,
-                        label: "Default Output",
-                      ),
-                      ..._outputDevices.map(
-                        (d) => DropdownMenuEntry(
-                          value: d,
-                          label: "${d.id} - ${d.name} - ${d.type}",
-                        ),
-                      ),
-                    ],
+                    devices: _outputDevices,
+                    defaultLabel: "Default Output",
                     onSelected: (v) =>
                         setState(() => _selectedOutputDevice = v),
                   ),
                   const SizedBox(height: 24),
+
                   const Text(
                     '--- TX (Transmit / Sender) ---',
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
-                  TextField(
+
+                  AudioConfigFields.sampleRateField(
                     controller: _txSampleRateController,
-                    decoration: const InputDecoration(
-                      labelText: 'TX Sample Rate (Hz)',
-                      contentPadding: EdgeInsets.symmetric(vertical: 4),
-                    ),
-                    keyboardType: TextInputType.number,
                     enabled: !_isCalling,
+                    label: 'TX Sample Rate (Hz)',
                   ),
                   const SizedBox(height: 8),
-                  TrackedDropdownMenu<int>(
-                    expandedInsets: EdgeInsets.zero,
-                    label: const Text('TX Channel Config'),
-                    inputDecorationTheme: const InputDecorationTheme(
-                      contentPadding: EdgeInsets.symmetric(vertical: 4),
-                      isDense: true,
-                    ),
+
+                  AudioConfigFields.channelConfigDropdown(
+                    customLabel: 'TX Channel Config',
                     initialSelection: _selectedChannelConfig,
                     enabled: !_isCalling,
-                    dropdownMenuEntries: const [
-                      DropdownMenuEntry(value: 16, label: "Mono (In)"),
-                      DropdownMenuEntry(value: 12, label: "Stereo (In)"),
-                    ],
+                    isInput: true,
                     onSelected: (v) {
                       if (v != null) {
                         setState(() => _selectedChannelConfig = v);
@@ -411,21 +287,11 @@ class _VoIPConfigWidgetState extends State<VoIPConfigWidget> {
                     },
                   ),
                   const SizedBox(height: 8),
-                  TrackedDropdownMenu<int>(
-                    expandedInsets: EdgeInsets.zero,
-                    label: const Text('TX Audio Format'),
-                    inputDecorationTheme: const InputDecorationTheme(
-                      contentPadding: EdgeInsets.symmetric(vertical: 4),
-                      isDense: true,
-                    ),
+
+                  AudioConfigFields.audioFormatDropdown(
+                    label: 'TX Audio Format',
                     initialSelection: _selectedAudioFormat,
                     enabled: !_isCalling,
-                    dropdownMenuEntries: const [
-                      DropdownMenuEntry(value: 3, label: "8-bit PCM"),
-                      DropdownMenuEntry(value: 2, label: "16-bit PCM"),
-                      DropdownMenuEntry(value: 21, label: "24-bit PCM"),
-                      DropdownMenuEntry(value: 4, label: "32-bit Float"),
-                    ],
                     onSelected: (v) {
                       if (v != null) {
                         setState(() => _selectedAudioFormat = v);
@@ -433,30 +299,17 @@ class _VoIPConfigWidgetState extends State<VoIPConfigWidget> {
                     },
                   ),
                   const SizedBox(height: 8),
-                  TrackedDropdownMenu<AudioDevice?>(
-                    label: const Text('TX Input Device (Microphone)'),
+
+                  AudioConfigFields.deviceDropdown(
+                    label: 'TX Input Device (Microphone)',
                     initialSelection: _selectedInputDevice,
                     enabled: !_isCalling,
-                    expandedInsets: EdgeInsets.zero,
-                    inputDecorationTheme: const InputDecorationTheme(
-                      contentPadding: EdgeInsets.symmetric(vertical: 4),
-                      isDense: true,
-                    ),
-                    dropdownMenuEntries: [
-                      const DropdownMenuEntry(
-                        value: null,
-                        label: "Default Input",
-                      ),
-                      ..._inputDevices.map(
-                        (d) => DropdownMenuEntry(
-                          value: d,
-                          label: "${d.id} - ${d.name} - ${d.type}",
-                        ),
-                      ),
-                    ],
+                    devices: _inputDevices,
+                    defaultLabel: "Default Input",
                     onSelected: (v) => setState(() => _selectedInputDevice = v),
                   ),
                   const SizedBox(height: 16),
+
                   CheckboxListTile(
                     title: const Text('TX Save to WAV File'),
                     value: _saveToFile,
@@ -486,22 +339,13 @@ class _VoIPConfigWidgetState extends State<VoIPConfigWidget> {
             ),
           ),
           const SizedBox(height: 8),
-          SizedBox(
-            height: 60,
-            child: Container(
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: CustomPaint(
-                painter: WaveformPainter(
-                  amplitudes: _amplitudes,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-              ),
-            ),
+
+          WaveformDisplay(
+            amplitudes: _amplitudes,
+            color: Theme.of(context).colorScheme.primary,
           ),
           const SizedBox(height: 8),
+
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 8),

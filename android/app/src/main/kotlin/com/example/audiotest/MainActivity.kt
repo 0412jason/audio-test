@@ -148,7 +148,7 @@ class MainActivity : FlutterActivity() {
                                                     "instanceId is required",
                                                     null
                                             )
-                            val sampleRate = call.argument<Int>("sampleRate") ?: 44100
+                            val sampleRate = call.argument<Int>("sampleRate") ?: 48000
                             val channelConfig =
                                     call.argument<Int>("channelConfig")
                                             ?: AudioFormat.CHANNEL_OUT_MONO
@@ -217,7 +217,7 @@ class MainActivity : FlutterActivity() {
                                                     "instanceId is required",
                                                     null
                                             )
-                            val sampleRate = call.argument<Int>("sampleRate") ?: 44100
+                            val sampleRate = call.argument<Int>("sampleRate") ?: 48000
                             val channelConfig =
                                     call.argument<Int>("channelConfig")
                                             ?: AudioFormat.CHANNEL_IN_MONO
@@ -388,7 +388,7 @@ class MainActivity : FlutterActivity() {
             val sampleRate =
                     if (fmt.containsKey(MediaFormat.KEY_SAMPLE_RATE))
                             fmt.getInteger(MediaFormat.KEY_SAMPLE_RATE)
-                    else 44100
+                    else 48000
             val channelCount =
                     if (fmt.containsKey(MediaFormat.KEY_CHANNEL_COUNT))
                             fmt.getInteger(MediaFormat.KEY_CHANNEL_COUNT)

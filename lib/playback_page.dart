@@ -3,101 +3,20 @@ import 'dart:async';
 import 'dart:collection';
 import 'package:file_picker/file_picker.dart';
 import 'audio_engine.dart';
-import 'waveform_painter.dart';
-import 'menu_tracker.dart';
+import 'widgets/split_view_layout.dart';
+import 'widgets/audio_config_fields.dart';
+import 'widgets/waveform_display.dart';
 
-class PlaybackPage extends StatefulWidget {
+class PlaybackPage extends StatelessWidget {
   const PlaybackPage({super.key});
-
-  @override
-  State<PlaybackPage> createState() => _PlaybackPageState();
-}
-
-class _PlaybackPageState extends State<PlaybackPage> {
-  int _splitCount = 1;
-
-  void _increaseSplit() {
-    setState(() {
-      if (_splitCount == 1) {
-        _splitCount = 2;
-      } else if (_splitCount == 2) {
-        _splitCount = 4;
-      }
-    });
-  }
-
-  void _decreaseSplit() {
-    setState(() {
-      if (_splitCount == 4) {
-        _splitCount = 2;
-      } else if (_splitCount == 2) {
-        _splitCount = 1;
-      }
-    });
-  }
-
-  Widget _buildGrid() {
-    if (_splitCount == 1) {
-      return const PlaybackConfigWidget();
-    } else if (_splitCount == 2) {
-      return Row(
-        children: const [
-          Expanded(child: PlaybackConfigWidget()),
-          VerticalDivider(width: 1, thickness: 1),
-          Expanded(child: PlaybackConfigWidget()),
-        ],
-      );
-    } else {
-      return Column(
-        children: [
-          Expanded(
-            child: Row(
-              children: const [
-                Expanded(child: PlaybackConfigWidget()),
-                VerticalDivider(width: 1, thickness: 1),
-                Expanded(child: PlaybackConfigWidget()),
-              ],
-            ),
-          ),
-          const Divider(height: 1, thickness: 1),
-          Expanded(
-            child: Row(
-              children: const [
-                Expanded(child: PlaybackConfigWidget()),
-                VerticalDivider(width: 1, thickness: 1),
-                Expanded(child: PlaybackConfigWidget()),
-              ],
-            ),
-          ),
-        ],
-      );
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.remove),
-                onPressed: _splitCount > 1 ? _decreaseSplit : null,
-              ),
-              const Text(
-                'Playback Configuration',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              IconButton(
-                icon: const Icon(Icons.add),
-                onPressed: _splitCount < 4 ? _increaseSplit : null,
-              ),
-            ],
-          ),
-          Expanded(child: _buildGrid()),
-        ],
+      child: SplitViewLayout(
+        title: 'Playback Configuration',
+        builder: () => const PlaybackConfigWidget(),
+        initialSplitCount: 1,
       ),
     );
   }
@@ -183,7 +102,7 @@ class _PlaybackConfigWidgetState extends State<PlaybackConfigWidget> {
   }
 
   void _startPlayback() async {
-    int sampleRate = int.tryParse(_sampleRateController.text) ?? 44100;
+    int sampleRate = int.tryParse(_sampleRateController.text) ?? 48000;
 
     await AudioEngine.startPlayback(
       instanceId: _instanceId,
@@ -271,16 +190,11 @@ class _PlaybackConfigWidgetState extends State<PlaybackConfigWidget> {
               child: Column(
                 children: [
                   // ── Playback Source (always first) ──────────────────────
-                  TrackedDropdownMenu<int>(
-                    expandedInsets: EdgeInsets.zero,
-                    label: const Text('Playback Source'),
-                    inputDecorationTheme: const InputDecorationTheme(
-                      contentPadding: EdgeInsets.symmetric(vertical: 4),
-                      isDense: true,
-                    ),
+                  AudioConfigFields.dropdown<int>(
+                    label: 'Playback Source',
                     initialSelection: _playbackSource,
                     enabled: !_isPlaying,
-                    dropdownMenuEntries: const [
+                    entries: const [
                       DropdownMenuEntry(value: 0, label: "Sine Wave"),
                       DropdownMenuEntry(value: 1, label: "Local File"),
                     ],
@@ -292,7 +206,7 @@ class _PlaybackConfigWidgetState extends State<PlaybackConfigWidget> {
                             // restore editable defaults when switching to sine
                             _detectedFileInfo = null;
                             _localFilePath = null;
-                            _sampleRateController.text = '44100';
+                            _sampleRateController.text = '48000';
                             _selectedChannelConfig = 4;
                             _selectedAudioFormat = 2;
                           }
@@ -322,13 +236,8 @@ class _PlaybackConfigWidgetState extends State<PlaybackConfigWidget> {
                   const SizedBox(height: 4),
 
                   // ── Sample Rate ─────────────────────────────────────────
-                  TextField(
+                  AudioConfigFields.sampleRateField(
                     controller: _sampleRateController,
-                    decoration: const InputDecoration(
-                      labelText: 'Sample Rate (Hz)',
-                      contentPadding: EdgeInsets.symmetric(vertical: 4),
-                    ),
-                    keyboardType: TextInputType.number,
                     enabled:
                         !_isPlaying &&
                         (_playbackSource == 0 || _detectedFileInfo == null),
@@ -336,21 +245,12 @@ class _PlaybackConfigWidgetState extends State<PlaybackConfigWidget> {
                   const SizedBox(height: 4),
 
                   // ── Channel Config ──────────────────────────────────────
-                  TrackedDropdownMenu<int>(
-                    expandedInsets: EdgeInsets.zero,
-                    label: const Text('Channel Config'),
-                    inputDecorationTheme: const InputDecorationTheme(
-                      contentPadding: EdgeInsets.symmetric(vertical: 4),
-                      isDense: true,
-                    ),
+                  AudioConfigFields.channelConfigDropdown(
                     initialSelection: _selectedChannelConfig,
                     enabled:
                         !_isPlaying &&
                         (_playbackSource == 0 || _detectedFileInfo == null),
-                    dropdownMenuEntries: const [
-                      DropdownMenuEntry(value: 4, label: "Mono (Out)"),
-                      DropdownMenuEntry(value: 12, label: "Stereo (Out)"),
-                    ],
+                    isInput: false,
                     onSelected: (v) {
                       if (v != null) {
                         setState(() => _selectedChannelConfig = v);
@@ -360,23 +260,11 @@ class _PlaybackConfigWidgetState extends State<PlaybackConfigWidget> {
                   const SizedBox(height: 4),
 
                   // ── Audio Format ────────────────────────────────────────
-                  TrackedDropdownMenu<int>(
-                    expandedInsets: EdgeInsets.zero,
-                    label: const Text('Audio Format'),
-                    inputDecorationTheme: const InputDecorationTheme(
-                      contentPadding: EdgeInsets.symmetric(vertical: 4),
-                      isDense: true,
-                    ),
+                  AudioConfigFields.audioFormatDropdown(
                     initialSelection: _selectedAudioFormat,
                     enabled:
                         !_isPlaying &&
                         (_playbackSource == 0 || _detectedFileInfo == null),
-                    dropdownMenuEntries: const [
-                      DropdownMenuEntry(value: 3, label: "8-bit PCM"),
-                      DropdownMenuEntry(value: 2, label: "16-bit PCM"),
-                      DropdownMenuEntry(value: 21, label: "24-bit PCM"),
-                      DropdownMenuEntry(value: 4, label: "32-bit Float"),
-                    ],
                     onSelected: (v) {
                       if (v != null) {
                         setState(() => _selectedAudioFormat = v);
@@ -385,17 +273,12 @@ class _PlaybackConfigWidgetState extends State<PlaybackConfigWidget> {
                   ),
                   const SizedBox(height: 4),
 
-                  TrackedDropdownMenu<int>(
-                    expandedInsets: EdgeInsets.zero,
-                    label: const Text('Usage'),
-                    inputDecorationTheme: const InputDecorationTheme(
-                      contentPadding: EdgeInsets.symmetric(vertical: 4),
-                      isDense: true,
-                    ),
+                  AudioConfigFields.dropdown<int>(
+                    label: 'Usage',
                     initialSelection: _selectedUsage,
                     enabled: !_isPlaying,
-                    dropdownMenuEntries: _usagesMap.isEmpty
-                        ? [
+                    entries: _usagesMap.isEmpty
+                        ? const [
                             DropdownMenuEntry(value: 1, label: "Media (1)"),
                             DropdownMenuEntry(
                               value: 2,
@@ -429,17 +312,12 @@ class _PlaybackConfigWidgetState extends State<PlaybackConfigWidget> {
                   ),
                   const SizedBox(height: 4),
 
-                  TrackedDropdownMenu<int>(
-                    expandedInsets: EdgeInsets.zero,
-                    label: const Text('Content Type'),
-                    inputDecorationTheme: const InputDecorationTheme(
-                      contentPadding: EdgeInsets.symmetric(vertical: 4),
-                      isDense: true,
-                    ),
+                  AudioConfigFields.dropdown<int>(
+                    label: 'Content Type',
                     initialSelection: _selectedContentType,
                     enabled: !_isPlaying,
-                    dropdownMenuEntries: _contentTypesMap.isEmpty
-                        ? [
+                    entries: _contentTypesMap.isEmpty
+                        ? const [
                             DropdownMenuEntry(value: 0, label: "Unknown (0)"),
                             DropdownMenuEntry(value: 1, label: "Speech (1)"),
                             DropdownMenuEntry(value: 2, label: "Music (2)"),
@@ -467,17 +345,12 @@ class _PlaybackConfigWidgetState extends State<PlaybackConfigWidget> {
                   ),
                   const SizedBox(height: 4),
 
-                  TrackedDropdownMenu<int>(
-                    expandedInsets: EdgeInsets.zero,
-                    label: const Text('Flags'),
-                    inputDecorationTheme: const InputDecorationTheme(
-                      contentPadding: EdgeInsets.symmetric(vertical: 4),
-                      isDense: true,
-                    ),
+                  AudioConfigFields.dropdown<int>(
+                    label: 'Flags',
                     initialSelection: _selectedFlags,
                     enabled: !_isPlaying,
-                    dropdownMenuEntries: _flagsMap.isEmpty
-                        ? [
+                    entries: _flagsMap.isEmpty
+                        ? const [
                             DropdownMenuEntry(value: 0, label: "None (0)"),
                             DropdownMenuEntry(
                               value: 0x1,
@@ -515,27 +388,12 @@ class _PlaybackConfigWidgetState extends State<PlaybackConfigWidget> {
                   ),
                   const SizedBox(height: 4),
 
-                  TrackedDropdownMenu<AudioDevice?>(
-                    expandedInsets: EdgeInsets.zero,
-                    label: const Text('Output Device (Port ID - Name - Type)'),
-                    inputDecorationTheme: const InputDecorationTheme(
-                      contentPadding: EdgeInsets.symmetric(vertical: 4),
-                      isDense: true,
-                    ),
+                  AudioConfigFields.deviceDropdown(
+                    label: 'Output Device (Port ID - Name - Type)',
                     initialSelection: _selectedDevice,
                     enabled: !_isPlaying,
-                    dropdownMenuEntries: [
-                      const DropdownMenuEntry(
-                        value: null,
-                        label: "Default Routing",
-                      ),
-                      ..._outputDevices.map(
-                        (d) => DropdownMenuEntry(
-                          value: d,
-                          label: "${d.id} - ${d.name} - ${d.type}",
-                        ),
-                      ),
-                    ],
+                    devices: _outputDevices,
+                    defaultLabel: "Default Routing",
                     onSelected: (v) => setState(() => _selectedDevice = v),
                   ),
                 ],
@@ -544,20 +402,9 @@ class _PlaybackConfigWidgetState extends State<PlaybackConfigWidget> {
           ),
           const SizedBox(height: 8),
 
-          SizedBox(
-            height: 60,
-            child: Container(
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: CustomPaint(
-                painter: WaveformPainter(
-                  amplitudes: _amplitudes,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-              ),
-            ),
+          WaveformDisplay(
+            amplitudes: _amplitudes,
+            color: Theme.of(context).colorScheme.primary,
           ),
           const SizedBox(height: 8),
 
