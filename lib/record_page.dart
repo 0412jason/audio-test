@@ -43,12 +43,14 @@ class _RecordConfigWidgetState extends State<RecordConfigWidget> {
   int _selectedAudioFormat = 2; // AudioFormat.ENCODING_PCM_16BIT
 
   int _selectedSource = 1;
-  int _selectedMode = 0; // Default MODE_NORMAL is 0
+  int _selectedMode = -3; // Default BYPASS is -3
 
   List<AudioDevice> _inputDevices = [];
   Map<String, int> _audioSources = {};
   Map<String, int> _audioModes = {};
   AudioDevice? _selectedDevice;
+
+  int? _originalMode; // Store original mode before modifying
 
   final Queue<double> _amplitudes = Queue();
   StreamSubscription? _amplitudeSub;
@@ -96,7 +98,8 @@ class _RecordConfigWidgetState extends State<RecordConfigWidget> {
 
         var sortedModes = modes.entries.toList()
           ..sort((a, b) => a.value.compareTo(b.value));
-        _audioModes = Map.fromEntries(sortedModes);
+        _audioModes = {'BYPASS': -3};
+        _audioModes.addEntries(sortedModes);
 
         if (_audioModes.isNotEmpty &&
             !_audioModes.values.contains(_selectedMode)) {
@@ -113,6 +116,10 @@ class _RecordConfigWidgetState extends State<RecordConfigWidget> {
   void _startRecording() async {
     int sampleRate = int.tryParse(_sampleRateController.text) ?? 48000;
 
+    if (_selectedMode != -3) {
+      _originalMode = await AudioEngine.getAudioMode();
+      await AudioEngine.setAudioMode(_selectedMode);
+    }
     await AudioEngine.startRecording(
       instanceId: _instanceId,
       sampleRate: sampleRate,
@@ -121,7 +128,6 @@ class _RecordConfigWidgetState extends State<RecordConfigWidget> {
       audioSource: _selectedSource,
       saveToFile: _saveToFile,
       preferredDeviceId: _selectedDevice?.id,
-      audioMode: _selectedMode,
     );
     setState(() {
       _isRecording = true;
@@ -158,6 +164,11 @@ class _RecordConfigWidgetState extends State<RecordConfigWidget> {
     });
     // Do not cancel _amplitudeSub here, wait for the final 'path' event.
     await AudioEngine.stopRecording(_instanceId);
+
+    if (_selectedMode != -3 && _originalMode != null) {
+      await AudioEngine.setAudioMode(_originalMode!);
+      _originalMode = null;
+    }
   }
 
   @override
@@ -238,6 +249,7 @@ class _RecordConfigWidgetState extends State<RecordConfigWidget> {
                     enabled: !_isRecording,
                     entries: _audioModes.isEmpty
                         ? const [
+                            DropdownMenuEntry(value: -3, label: "BYPASS (-3)"),
                             DropdownMenuEntry(
                               value: 0,
                               label: "MODE_NORMAL (0)",

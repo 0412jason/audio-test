@@ -59,6 +59,8 @@ class _VoIPConfigWidgetState extends State<VoIPConfigWidget> {
   StreamSubscription? _amplitudeSub;
   static const int _maxAmplitudes = 100;
 
+  int? _originalMode;
+
   @override
   void initState() {
     super.initState();
@@ -94,6 +96,8 @@ class _VoIPConfigWidgetState extends State<VoIPConfigWidget> {
       _isCalling = true;
       _savedFilePath = null;
     });
+
+    _originalMode = await AudioEngine.getAudioMode();
 
     // 1. Set mode to ringtone (2 = MODE_RINGTONE)
     await AudioEngine.setAudioMode(2);
@@ -164,7 +168,6 @@ class _VoIPConfigWidgetState extends State<VoIPConfigWidget> {
       channelConfig: _selectedChannelConfig,
       audioFormat: _selectedAudioFormat,
       audioSource: _selectedSource,
-      audioMode: _selectedMode,
       preferredDeviceId: _selectedInputDevice?.id,
       saveToFile: _saveToFile,
     );
@@ -200,6 +203,11 @@ class _VoIPConfigWidgetState extends State<VoIPConfigWidget> {
     await AudioEngine.stopPlayback(_instanceId + 1);
     await AudioEngine.stopPlayback(_instanceId + 2);
     await AudioEngine.setCommunicationDevice(null);
+
+    if (_originalMode != null) {
+      await AudioEngine.setAudioMode(_originalMode!);
+      _originalMode = null;
+    }
   }
 
   @override

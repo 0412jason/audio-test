@@ -96,6 +96,11 @@ class MainActivity : FlutterActivity() {
                                 result.success(info)
                             }
                         }
+                        "getAudioMode" -> {
+                            val audioManager =
+                                    getSystemService(Context.AUDIO_SERVICE) as AudioManager
+                            result.success(audioManager.mode)
+                        }
                         "setAudioMode" -> {
                             val audioMode =
                                     call.argument<Int>("audioMode") ?: AudioManager.MODE_NORMAL
@@ -227,8 +232,6 @@ class MainActivity : FlutterActivity() {
                             val audioSource = call.argument<Int>("audioSource") ?: 0
                             val saveToFile = call.argument<Boolean>("saveToFile") ?: false
                             val preferredDeviceId = call.argument<Int>("preferredDeviceId")
-                            val audioMode =
-                                    call.argument<Int>("audioMode") ?: AudioManager.MODE_NORMAL
 
                             if (ContextCompat.checkSelfPermission(
                                             this,
@@ -255,8 +258,7 @@ class MainActivity : FlutterActivity() {
                                     audioFormat,
                                     audioSource,
                                     saveToFile,
-                                    preferredDeviceId,
-                                    audioMode
+                                    preferredDeviceId
                             )
                             result.success(null)
                         }
@@ -806,8 +808,7 @@ class MainActivity : FlutterActivity() {
             audioFormat: Int,
             audioSource: Int,
             saveToFile: Boolean,
-            preferredDeviceId: Int?,
-            audioMode: Int
+            preferredDeviceId: Int?
     ) {
         stopRecording(instanceId)
 
@@ -816,10 +817,6 @@ class MainActivity : FlutterActivity() {
         ) {
             return
         }
-
-        val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        audioManager.mode = audioMode
-        Log.d("AudioTest", "Set audio mode to $audioMode current mode ${audioManager.mode}")
 
         val bufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
 
@@ -1086,10 +1083,6 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun stopRecording(instanceId: Int) {
-        val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        audioManager.mode = AudioManager.MODE_NORMAL
-        Log.d("AudioTest", "Restored audio mode to MODE_NORMAL")
-
         isRecordingMap[instanceId] = false
         recordThreads[instanceId]?.join()
         recordThreads.remove(instanceId)

@@ -168,6 +168,16 @@ class AudioEngine {
     }
   }
 
+  static Future<int> getAudioMode() async {
+    try {
+      final int result = await _methodChannel.invokeMethod('getAudioMode');
+      return result;
+    } on PlatformException catch (e) {
+      debugPrint("Failed to get audio mode: '${e.message}'.");
+      return 0; // default MODE_NORMAL
+    }
+  }
+
   static Future<void> setAudioMode(int audioMode) async {
     try {
       await _methodChannel.invokeMethod('setAudioMode', {
@@ -257,7 +267,6 @@ class AudioEngine {
     required int audioSource,
     bool saveToFile = false,
     int? preferredDeviceId,
-    int? audioMode,
   }) async {
     try {
       await _methodChannel.invokeMethod('startRecording', {
@@ -268,7 +277,6 @@ class AudioEngine {
         'audioSource': audioSource,
         'saveToFile': saveToFile,
         'preferredDeviceId': preferredDeviceId,
-        'audioMode': audioMode,
       });
     } on PlatformException catch (e) {
       debugPrint("Failed to start recording: '${e.message}'.");

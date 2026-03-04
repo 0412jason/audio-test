@@ -55,10 +55,13 @@ class _PlaybackConfigWidgetState extends State<PlaybackConfigWidget> {
   Map<String, int> _usagesMap = {};
   Map<String, int> _contentTypesMap = {};
   Map<String, int> _flagsMap = {};
+  Map<String, int> _audioModes = {};
 
   final Queue<double> _amplitudes = Queue();
   StreamSubscription? _amplitudeSub;
   static const int _maxAmplitudes = 100;
+
+  int? _originalMode; // Store original mode before modifying
 
   // Non-null when a local file has been analysed
   FileAudioInfo? _detectedFileInfo;
@@ -76,11 +79,17 @@ class _PlaybackConfigWidgetState extends State<PlaybackConfigWidget> {
 
   Future<void> _loadAudioAttributesOptions() async {
     final options = await AudioEngine.getAudioAttributesOptions();
+    final modes = await AudioEngine.getAudioModeOptions();
     if (mounted) {
       setState(() {
         _usagesMap = options['usages'] ?? {};
         _contentTypesMap = options['contentTypes'] ?? {};
         _flagsMap = options['flags'] ?? {};
+
+        var sortedModes = modes.entries.toList()
+          ..sort((a, b) => a.value.compareTo(b.value));
+        _audioModes = {'BYPASS': -3};
+        _audioModes.addEntries(sortedModes);
       });
     }
   }
@@ -101,9 +110,15 @@ class _PlaybackConfigWidgetState extends State<PlaybackConfigWidget> {
     }
   }
 
+  int _selectedMode = -3; // Default BYPASS is -3
+
   void _startPlayback() async {
     int sampleRate = int.tryParse(_sampleRateController.text) ?? 48000;
 
+    if (_selectedMode != -3) {
+      _originalMode = await AudioEngine.getAudioMode();
+      await AudioEngine.setAudioMode(_selectedMode);
+    }
     await AudioEngine.startPlayback(
       instanceId: _instanceId,
       sampleRate: sampleRate,
@@ -143,6 +158,11 @@ class _PlaybackConfigWidgetState extends State<PlaybackConfigWidget> {
     });
     _amplitudeSub?.cancel();
     await AudioEngine.stopPlayback(_instanceId);
+
+    if (_selectedMode != -3 && _originalMode != null) {
+      await AudioEngine.setAudioMode(_originalMode!);
+      _originalMode = null;
+    }
   }
 
   void _pausePlayback() async {
@@ -383,6 +403,36 @@ class _PlaybackConfigWidgetState extends State<PlaybackConfigWidget> {
                     onSelected: (v) {
                       if (v != null) {
                         setState(() => _selectedFlags = v);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 4),
+
+                  AudioConfigFields.dropdown<int>(
+                    label: 'Audio Mode',
+                    initialSelection: _selectedMode,
+                    enabled: !_isPlaying,
+                    entries: _audioModes.isEmpty
+                        ? const [
+                            DropdownMenuEntry(value: -3, label: "BYPASS (-3)"),
+                            DropdownMenuEntry(
+                              value: 0,
+                              label: "MODE_NORMAL (0)",
+                            ),
+                            DropdownMenuEntry(
+                              value: 3,
+                              label: "MODE_IN_COMMUNICATION (3)",
+                            ),
+                          ]
+                        : _audioModes.entries.map((entry) {
+                            return DropdownMenuEntry(
+                              value: entry.value,
+                              label: "${entry.key} (${entry.value})",
+                            );
+                          }).toList(),
+                    onSelected: (v) {
+                      if (v != null) {
+                        setState(() => _selectedMode = v);
                       }
                     },
                   ),
