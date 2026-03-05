@@ -99,8 +99,8 @@ class _VoIPConfigWidgetState extends State<VoIPConfigWidget> {
 
     _originalMode = await AudioEngine.getAudioMode();
 
-    // 1. Set mode to ringtone (2 = MODE_RINGTONE)
-    await AudioEngine.setAudioMode(2);
+    // 1. Set mode to ringtone (1 = MODE_RINGTONE)
+    await AudioEngine.setAudioMode(1);
 
     int ringtoneId = _instanceId + 2;
 
