@@ -312,13 +312,6 @@ class AudioPlaybackManager(private val activity: Activity) {
         }
 
         Log.i("AudioPlaybackManager", "Starting PCM playback")
-        val audioTrack = createAndStartAudioTrack(
-            instanceId, audioAttributes, sampleRate, channelConfig, audioFormat, bufferSize, preferredDeviceId, false
-        )
-        if (audioTrack == null) {
-            extractor.release()
-            return
-        }
 
         val codec: MediaCodec
         try {
@@ -334,11 +327,17 @@ class AudioPlaybackManager(private val activity: Activity) {
         val info = MediaCodec.BufferInfo()
         var isEOS = false
 
-        val channels = AudioPcmHelper.getChannelCount(channelConfig)
-        val bytesPerSample = AudioPcmHelper.getBytesPerSample(audioFormat)
-        val bytesPerFrame = channels * bytesPerSample
-        val framesPerUpdate = sampleRate / 40
-        val subChunkSizeInBytes = (framesPerUpdate * bytesPerFrame).coerceAtLeast(bytesPerFrame)
+        var audioTrack: AudioTrack? = null
+        var trackSampleRate = if (format.containsKey(MediaFormat.KEY_SAMPLE_RATE)) format.getInteger(MediaFormat.KEY_SAMPLE_RATE) else sampleRate
+        var trackChannelCount = if (format.containsKey(MediaFormat.KEY_CHANNEL_COUNT)) format.getInteger(MediaFormat.KEY_CHANNEL_COUNT) else 1
+        var trackChannelConfig = if (trackChannelCount == 1) AudioFormat.CHANNEL_OUT_MONO else AudioFormat.CHANNEL_OUT_STEREO
+        var trackAudioFormat = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && format.containsKey(MediaFormat.KEY_PCM_ENCODING)) {
+            format.getInteger(MediaFormat.KEY_PCM_ENCODING)
+        } else {
+            AudioFormat.ENCODING_PCM_16BIT
+        }
+        var bytesPerFrame = trackChannelCount * AudioPcmHelper.getBytesPerSample(trackAudioFormat)
+        var subChunkSizeInBytes = ((trackSampleRate / 40) * bytesPerFrame).coerceAtLeast(bytesPerFrame)
 
         while (isPlayingMap[instanceId] == true) {
             if (isPausedMap[instanceId] == true) {
@@ -362,9 +361,34 @@ class AudioPlaybackManager(private val activity: Activity) {
             }
 
             val outIndex = codec.dequeueOutputBuffer(info, 10000)
-            if (outIndex >= 0) {
+            if (outIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
+                val newFormat = codec.outputFormat
+                trackSampleRate = if (newFormat.containsKey(MediaFormat.KEY_SAMPLE_RATE)) newFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE) else trackSampleRate
+                trackChannelCount = if (newFormat.containsKey(MediaFormat.KEY_CHANNEL_COUNT)) newFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT) else trackChannelCount
+                trackChannelConfig = if (trackChannelCount == 1) AudioFormat.CHANNEL_OUT_MONO else AudioFormat.CHANNEL_OUT_STEREO
+                trackAudioFormat = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && newFormat.containsKey(MediaFormat.KEY_PCM_ENCODING)) {
+                    newFormat.getInteger(MediaFormat.KEY_PCM_ENCODING)
+                } else {
+                    AudioFormat.ENCODING_PCM_16BIT
+                }
+                bytesPerFrame = trackChannelCount * AudioPcmHelper.getBytesPerSample(trackAudioFormat)
+                subChunkSizeInBytes = ((trackSampleRate / 40) * bytesPerFrame).coerceAtLeast(bytesPerFrame)
+                Log.i("AudioPlaybackManager", "Decoded format changed: rate=$trackSampleRate, channels=$trackChannelCount, format=$trackAudioFormat")
+            } else if (outIndex >= 0) {
+                if (audioTrack == null) {
+                    val outBufferSize = AudioTrack.getMinBufferSize(trackSampleRate, trackChannelConfig, trackAudioFormat)
+                    val bufferSizeToUse = if (outBufferSize > 0) outBufferSize * 2 else 2048
+                    audioTrack = createAndStartAudioTrack(
+                        instanceId, audioAttributes, trackSampleRate, trackChannelConfig, trackAudioFormat, bufferSizeToUse, preferredDeviceId, false
+                    )
+                    if (audioTrack == null) {
+                        Log.e("AudioPlaybackManager", "Failed to create dynamic PCM AudioTrack")
+                        break
+                    }
+                }
+
                 val buffer = codec.getOutputBuffer(outIndex)
-                if (buffer != null && info.size > 0) {
+                if (buffer != null && info.size > 0 && audioTrack != null) {
                     val chunk = ByteArray(info.size)
                     buffer.position(info.offset)
                     buffer.limit(info.offset + info.size)
@@ -375,9 +399,9 @@ class AudioPlaybackManager(private val activity: Activity) {
                         if (isPlayingMap[instanceId] != true) break
                         
                         val length = Math.min(subChunkSizeInBytes, chunk.size - i)
-                        audioTrack.write(chunk, i, length)
+                        audioTrack!!.write(chunk, i, length)
 
-                        val maxAmp = AudioPcmHelper.calculateMaxAmplitude(chunk, i, length, audioFormat, bytesPerFrame)
+                        val maxAmp = AudioPcmHelper.calculateMaxAmplitude(chunk, i, length, trackAudioFormat, bytesPerFrame)
                         notifyAmplitude(instanceId, maxAmp)
                     }
                 }
