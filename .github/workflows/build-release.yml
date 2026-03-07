@@ -2,9 +2,8 @@ name: Build and Release Android APK
 
 on:
   push:
-    branches:
-      - main
-      - master
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 jobs:
@@ -44,17 +43,21 @@ jobs:
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
         run: flutter build apk --release
 
+      - name: Rename APK
+        run: mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/AudioTest-${{ github.ref_name }}.apk
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: release-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: AudioTest-${{ github.ref_name }}
+          path: build/app/outputs/flutter-apk/AudioTest-${{ github.ref_name }}.apk
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: latest
-          name: Latest Build
-          files: build/app/outputs/flutter-apk/app-release.apk
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          files: build/app/outputs/flutter-apk/AudioTest-${{ github.ref_name }}.apk
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
