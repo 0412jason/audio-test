@@ -534,7 +534,7 @@ class AudioPlaybackManager(private val activity: Activity) {
     }
 
     private fun sendAudioTrackInfo(instanceId: Int, track: AudioTrack, isOffloaded: Boolean) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.CUPCAKE) {
             val infoMap = mutableMapOf<String, Any>(
                 "id" to instanceId,
                 "sampleRate" to track.sampleRate,
@@ -550,34 +550,31 @@ class AudioPlaybackManager(private val activity: Activity) {
                 infoMap["flags"] = attrs.flags
             }
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                val routedDevicesList = mutableListOf<Map<String, Any>>()
+            val routedDevicesList = mutableListOf<Map<String, Any>>()
 
-                if (Build.VERSION.SDK_INT >= 33) {
-                    val devices = audioManager.getAudioDevicesForAttributes(track.audioAttributes)
-                    for (device in devices) {
-                        routedDevicesList.add(mapOf(
-                            "name" to device.productName.toString(),
-                            "type" to "${AudioDeviceManager(context).getDeviceTypeName(device.type)} (${device.type})",
-                            "id" to device.id
-                        ))
-                    }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+                val devices = track.routedDevices
+                for (device in devices) {
+                    routedDevicesList.add(mapOf(
+                        "name" to device.productName.toString(),
+                        "type" to "${AudioDeviceManager(context).getDeviceTypeName(device.type)} (${device.type})",
+                        "id" to device.id
+                    ))
                 }
-
-                if (routedDevicesList.isEmpty()) {
-                    track.routedDevice?.let { device ->
-                        routedDevicesList.add(mapOf(
-                            "name" to device.productName.toString(),
-                            "type" to "${AudioDeviceManager(context).getDeviceTypeName(device.type)} (${device.type})",
-                            "id" to device.id
-                        ))
-                    }
-                }
-
-                if (routedDevicesList.isNotEmpty()) {
-                    infoMap["routedDevices"] = routedDevicesList
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                track.routedDevice?.let { device ->
+                    routedDevicesList.add(mapOf(
+                        "name" to device.productName.toString(),
+                        "type" to "${AudioDeviceManager(context).getDeviceTypeName(device.type)} (${device.type})",
+                        "id" to device.id
+                    ))
                 }
             }
+
+            if (routedDevicesList.isNotEmpty()) {
+                infoMap["routedDevices"] = routedDevicesList
+            }
+
             activity.runOnUiThread { trackInfoSink?.success(infoMap) }
         }
     }
